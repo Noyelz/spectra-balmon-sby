@@ -1,0 +1,27 @@
+# Environment Variables
+.env
+
+# Python Virtual Environment
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env.bak/
+venv.bak/
+
+# Logs
+*.log
+logs/
+
+# IDE & Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker
+# (Jangan ignore docker-compose.yml karena butuh di repo)
+docker-compose.override.yml

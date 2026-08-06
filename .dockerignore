@@ -1,0 +1,25 @@
+# Mengabaikan file yang tidak perlu masuk ke dalam Docker image
+# untuk mempercepat proses build dan mengurangi ukuran image.
+
+.git/
+.gitignore
+.dockerignore
+
+# Dokumentasi
+*.md
+docs/
+
+# Environment dan Docker Config
+.env
+docker-compose*.yml
+Makefile
+
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# IDE
+.vscode/
+.idea/
