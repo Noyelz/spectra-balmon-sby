@@ -51,6 +51,7 @@ class HasilPengukuran(db.Model):
     h3_db = db.Column(db.Float)
     h3_dbm = db.Column(db.Float)
     keterangan = db.Column(db.Text)
+    catatan_llm = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     

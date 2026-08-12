@@ -1,10 +1,12 @@
 import os
 import uuid
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from app import db
 from app.models.radio import StasiunRadio
 from app.models.session import MeasurementSession
 from app.minio_client import upload_file_to_minio
+from app.export_helper import generate_word_report, generate_pdf_report
+
 
 # Blueprint itu seperti kumpulan rute. nantinya akan di registrasikan di file app utama.
 main_bp = Blueprint('main', __name__)
@@ -100,20 +102,23 @@ def hapus_radio(id):
 
     return redirect(url_for('main.daftar_radio'))
 
-# rute halaman upload: sesi pengkuran (upload 6 file per stasiun)
+# ---------------------------------------------------------
+# RUTE MODULE UPLOAD & SESI PENGUKURAN (6 FILE MINIO)
+# ---------------------------------------------------------
 
-# 1. menampilkan form sesi pengukuran baru
+# 1. Halaman Khusus Form Upload File (.fmspa + gambar)
+@main_bp.route('/upload-file', methods=['GET'])
+def upload_file_view():
+    # Mengambil master data stasiun radio untuk isi dropdown
+    stasiun_list = StasiunRadio.query.order_by(StasiunRadio.nama_stasiun.asc()).all()
+    return render_template('upload_file.html', stasiun_list=stasiun_list)
+
+# 2. Halaman Daftar Riwayat Sesi Pengukuran & AI Harness
 @main_bp.route('/sesi-pengukuran', methods=['GET'])
 def sesi_pengukuran_view():
-    stasiun_list = StasiunRadio.query.order_by(StasiunRadio.nama_stasiun.asc()).all()
-    selected_id = request.args.get('stasiun_id', type=int)
-    selected_stasiun = StasiunRadio.query.get(selected_id) if selected_id else None
-    
-    return render_template(
-        'sesi_pengukuran.html',
-        stasiun_list=stasiun_list,
-        selected_stasiun=selected_stasiun
-    )
+    # Mengambil seluruh riwayat sesi yang tersimpan di PostgreSQL
+    sesi_list = MeasurementSession.query.order_by(MeasurementSession.id.desc()).all()
+    return render_template('sesi_list.html', sesi_list=sesi_list)
 
 # 2. api endpoint untuk ambil info stasiun saat dropdown dipilih (htmx)
 @main_bp.route('/api/stasiun-detail/<int:id>', methods=['GET'])
@@ -131,6 +136,10 @@ def stasiun_detail_api(id=None):
         • Kab/Kota: {stasiun.kab_kota} | Sub Servis: {stasiun.sub_servis or '-'} | Kanal: {stasiun.kanal or '-'}<br>
         • Frekuensi: <strong>{stasiun.frekuensi_mhz} MHz</strong>
     </div>"""
+
+from redis import Redis
+from rq import Queue
+from app.models.radio import StasiunRadio, HasilPengukuran
 
 # 3. memproses upload 6 file dan menyimpan sesi ke minio + db (post)
 @main_bp.route('/sesi-pengukuran/upload', methods=['POST'])
@@ -182,11 +191,116 @@ def simpan_sesi_pengukuran():
     db.session.add(sesi_baru)
     db.session.commit()
 
-    return f"""
-    <div style="background: #e6ffed; border: 1px solid #2da44e; color: #1a7f37; padding: 15px; border-radius: 2px; margin-top: 15px;">
-    <h4 style="margin-top:0;">Sesi Pengukuran Berhasil Dibuat!</h4>
-    <p>UUID Sesi: <strong>{session_id}</strong></p>
-    <p>Seluruh 6 file telah sukses disimpan di Object Storage (MinIO). Status: <strong>Uploaded (Menunggu Queue Parser)</strong>.</p>
-    <div>
-    """
-    
+    # Memicu Job ke Redis Queue untuk diproses oleh Worker XML Parser
+    REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+    try:
+        redis_conn = Redis.from_url(REDIS_URL)
+        q = Queue('parse_xml_tasks', connection=redis_conn)
+        q.enqueue('worker.process_xml_parsing_job', session_id)
+        print(f"✅ Job parsing {session_id} berhasil dikirim ke Redis Queue.")
+    except Exception as e:
+        print(f"⚠️ Redis Enqueue Warning: {e}")
+
+    # Langsung arahkan ke Halaman Detail Sesi Pengukuran
+    return redirect(url_for('main.sesi_detail_view', session_uuid=session_id))
+
+# 4. Halaman Detail Hasil Parsing Sesi Pengukuran
+@main_bp.route('/sesi/detail/<session_uuid>', methods=['GET'])
+def sesi_detail_view(session_uuid):
+    sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
+    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
+
+# 5. Rute untuk Menghapus Sesi Pengukuran (POST)
+@main_bp.route('/sesi/hapus/<session_uuid>', methods=['POST'])
+def hapus_sesi(session_uuid):
+    sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
+    db.session.delete(sesi)
+    db.session.commit()
+    sesi_list = MeasurementSession.query.order_by(MeasurementSession.id.desc()).all()
+    return render_template('sesi_list.html', sesi_list=sesi_list)
+
+# 6. Rute Pemicu Analisis AI LLM (POST)
+@main_bp.route('/sesi/analisis-ai/<session_uuid>', methods=['POST'])
+def pemicu_analisis_ai(session_uuid):
+    sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
+
+    # Memicu Job ke Redis Queue 'llm_tasks' untuk diproses oleh Worker AI Harness
+    REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+    # 🔍 Verifikasi apakah ada AI Harness Worker yang aktif sebelum merubah status sesi
+    try:
+        from redis import Redis
+        from rq import Worker
+        redis_conn = Redis.from_url(REDIS_URL)
+        workers = Worker.all(connection=redis_conn)
+        ai_worker_active = any('llm_tasks' in [q.name for q in w.queues] for w in workers)
+    except Exception as e:
+        print(f"⚠️ Gagal memverifikasi status AI Harness Worker: {e}")
+        ai_worker_active = False
+
+    if not ai_worker_active:
+        flash("Gagal memicu Analisis AI: Layanan AI Harness Worker sedang offline (tidak aktif). Silakan jalankan worker.py di folder services/ai-harness terlebih dahulu sebelum menekan tombol ini!", "danger")
+        hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
+
+    sesi.status = 'analyzing'
+    db.session.commit()
+
+    try:
+        from redis import Redis
+        from rq import Queue
+        redis_conn = Redis.from_url(REDIS_URL)
+        q = Queue('llm_tasks', connection=redis_conn)
+        q.enqueue('worker.process_llm_analysis_job', session_uuid)
+        print(f"🤖 Job LLM {session_uuid} berhasil dikirim ke Redis Queue 'llm_tasks'.")
+    except Exception as e:
+        print(f"⚠️ Redis Enqueue LLM Warning: {e}")
+
+    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
+
+
+
+# RUTE EKSPOR LAPORAN MULTI-STASIUN (WORD & PDF)
+
+@main_bp.route('/export/word', methods=['POST'])
+def export_word():
+    session_uuids = request.form.getlist('session_uuids')
+    if not session_uuids:
+        flash("Pilih minimal satu sesi pengukuran untuk diekspor!", "warning")
+        return redirect(url_for('main.sesi_pengukuran_view'))
+    sessions_data = []
+    for suid in session_uuids:
+        sesi = MeasurementSession.query.filter_by(session_uuid=suid).first()
+        if sesi:
+            stasiun = StasiunRadio.query.get(sesi.stasiun_id)
+            hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+            sessions_data.append((sesi, stasiun, hasil))
+    doc_io = generate_word_report(sessions_data)
+    return send_file(
+        doc_io,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True,
+        download_name='Laporan_Hasil_Pengukuran_Balmon_SFR.docx'
+    )
+@main_bp.route('/export/pdf', methods=['POST'])
+def export_pdf():
+    session_uuids = request.form.getlist('session_uuids')
+    if not session_uuids:
+        flash("Pilih minimal satu sesi pengukuran untuk diekspor!", "warning")
+        return redirect(url_for('main.sesi_pengukuran_view'))
+    sessions_data = []
+    for suid in session_uuids:
+        sesi = MeasurementSession.query.filter_by(session_uuid=suid).first()
+        if sesi:
+            stasiun = StasiunRadio.query.get(sesi.stasiun_id)
+            hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+            sessions_data.append((sesi, stasiun, hasil))
+    pdf_io = generate_pdf_report(sessions_data)
+    return send_file(
+        pdf_io,
+        mimetype='application/pdf',
+        as_attachment=True,
+        download_name='Laporan_Hasil_Pengukuran_Balmon_SFR.pdf'
+    )

@@ -1,0 +1,182 @@
+{% if not request.headers.get('HX-Request') %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block content %}
+<!-- MENAMPILKAN PESAN WARNING / FLASH DARI SERVER -->
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for category, message in messages %}
+      <div style="background-color: #ffebe9; border: 1px solid #cf222e; color: #cf222e; padding: 12px; margin-bottom: 20px; border-radius: 2px; font-size: 13px; font-weight: bold; line-height: 1.4;">
+        {{ message }}
+      </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <h2 style="margin-bottom: 5px; color: var(--text-color);">Detail Sesi Pengukuran Spectrum Analyzer</h2>
+        <p style="color: #555; font-size: 13px; margin-top: 0;">UUID Sesi: <code>{{ sesi.session_uuid }}</code> | Tanggal: {{ sesi.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+    </div>
+    <div>
+        <a href="/sesi-pengukuran" hx-get="/sesi-pengukuran" hx-target="#main-content" hx-push-url="true"
+            style="background-color: #777; color: white; padding: 6px 12px; text-decoration: none; font-size: 12px; font-weight: bold; border-radius: 2px;">
+            Kembali ke Daftar Sesi
+        </a>
+    </div>
+</div>
+
+<!-- BOX STATUS & POLLING HTMX JIKA MASIH DIPROSES ATAU DI-ANALISIS -->
+<div id="status-polling-box">
+    {% if sesi.status == 'uploaded' or sesi.status == 'parsing' %}
+    <div hx-get="/sesi/detail/{{ sesi.session_uuid }}" hx-target="#main-content" hx-trigger="every 2s"
+        style="background: #eef6ff; border: 1px solid #0055aa; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #0055aa;">Sedang Diproses oleh XML Parser Worker...</h4>
+        <p style="margin-bottom: 0; font-size: 13px;">File sedang diunduh dari MinIO dan di-parse oleh worker background. Halaman akan ter-update otomatis...</p>
+    </div>
+    {% elif sesi.status == 'analyzing' %}
+    <div hx-get="/sesi/detail/{{ sesi.session_uuid }}" hx-target="#main-content" hx-trigger="every 2s"
+        style="background: #eef6ff; border: 1px solid #0055aa; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #0055aa;">Sedang Menganalisis dengan Local LLM (LM Studio)...</h4>
+        <p style="margin-bottom: 0; font-size: 13px;">AI Harness sedang mengolah parameter 13 kolom. Halaman akan ter-update otomatis setelah respon LLM diterima...</p>
+    </div>
+    {% elif sesi.status == 'completed' %}
+    <div style="background: #e6ffed; border: 1px solid #2da44e; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #1a7f37;">Status: Selesai Analisis AI (Completed)</h4>
+        <p style="margin-bottom: 0; font-size: 13px;">Hasil analisis teknis dan evaluasi hukum dari Local LLM telah berhasil disimpan.</p>
+    </div>
+    {% elif sesi.status == 'parsed' %}
+    <div style="background: #e6ffed; border: 1px solid #2da44e; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #1a7f37;">Status: VALID (Frekuensi Cocok)</h4>
+        <p style="margin-bottom: 0; font-size: 13px;">{{ hasil.keterangan if hasil else 'Frekuensi terukur cocok dengan master data stasiun radio.' }}</p>
+    </div>
+    {% elif sesi.status == 'warning_mismatch' %}
+    <div style="background: #ffebe9; border: 1px solid #cf222e; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #cf222e;">Status: TIDAK VALID (Ketidakcocokan Frekuensi Detected)</h4>
+        <p style="margin-bottom: 0; font-size: 13px; font-weight: bold; color: #cf222e;">
+            {{ hasil.keterangan if hasil else 'Frekuensi terukur pada file beda dengan master data stasiun radio!' }}
+        </p>
+        <p style="margin-top: 5px; margin-bottom: 0; font-size: 12px; color: #555;">
+            Tolong cek file yang di-upload atau stasiun radio yang Anda pilih. Tombol pengiriman ke AI (LLM) dinonaktifkan sampai file/stasiun diperbaiki.
+        </p>
+    </div>
+    {% elif sesi.status == 'error_parsing' or sesi.status == 'error_llm' %}
+    <div style="background: #ffebe9; border: 1px solid #cf222e; padding: 15px; border-radius: 2px; margin-bottom: 20px;">
+        <h4 style="margin-top: 0; color: #cf222e;">Status: Error Sistem</h4>
+        <p style="margin-bottom: 0; font-size: 13px;">Terjadi kesalahan saat memproses data atau saat menghubungi Local LLM API.</p>
+    </div>
+    {% endif %}
+</div>
+
+<!-- INFORMASI STASIUN RADIO -->
+<div style="background: white; border: 1px solid var(--border-color); padding: 15px; margin-bottom: 20px; border-radius: 2px;">
+    <h3 style="margin-top: 0; color: var(--mc-green); font-size: 14px; margin-bottom: 10px;">Master Data Stasiun Radio</h3>
+    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+        <tr>
+            <td style="width: 150px; font-weight: bold; padding: 4px 0;">Nama Stasiun:</td>
+            <td><strong>{{ sesi.stasiun.nama_stasiun }}</strong></td>
+            <td style="width: 150px; font-weight: bold; padding: 4px 0;">Frekuensi Master:</td>
+            <td><strong style="color: var(--mc-green);">{{ sesi.stasiun.frekuensi_mhz }} MHz</strong></td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding: 4px 0;">Penyelenggara:</td>
+            <td>{{ sesi.stasiun.nama_penyelenggara }}</td>
+            <td style="font-weight: bold; padding: 4px 0;">Kab / Kota:</td>
+            <td>{{ sesi.stasiun.kab_kota }}</td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold; padding: 4px 0;">Sub Servis:</td>
+            <td>{{ sesi.stasiun.sub_servis or '-' }}</td>
+            <td style="font-weight: bold; padding: 4px 0;">Kanal:</td>
+            <td>{{ sesi.stasiun.kanal or '-' }}</td>
+        </tr>
+    </table>
+</div>
+
+<!-- TABEL HASIL PARSING (13 KOLOM PERSIS SEPERTI GAMBAR LAPORAN) -->
+{% if hasil %}
+<div style="background: white; border: 1px solid var(--border-color); padding: 15px; margin-bottom: 20px; border-radius: 2px; overflow-x: auto;">
+    <h3 style="margin-top: 0; color: var(--mc-green); font-size: 14px; margin-bottom: 12px;">Tabel Parameter Ekstraksi XML (.fmspa)</h3>
+    
+    <table class="data-table" style="font-size: 12px; width: 100%; border-collapse: collapse; text-align: center;">
+        <thead>
+            <tr style="background-color: #e6f0fa; color: #003366;">
+                <th>FREKUENSI (MHz)</th>
+                <th>LEVEL (dBm)</th>
+                <th>BANDWIDTH (KHz)</th>
+                <th>DEVIASI (KHz)</th>
+                <th>H1 (MHz)</th>
+                <th>H1 (dBm)</th>
+                <th>H1 (dB)</th>
+                <th>H2 (MHz)</th>
+                <th>H2 (dBm)</th>
+                <th>H2 (dB)</th>
+                <th>H3 (MHz)</th>
+                <th>H3 (dBm)</th>
+                <th>H3 (dB)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="font-weight: bold; background: #fffde6;">{{ sesi.stasiun.frekuensi_mhz }}</td>
+                <td style="font-weight: bold;">{{ hasil.level_dbm }}</td>
+                <td>{{ hasil.band_width_khz }}</td>
+                <td>{{ hasil.deviasi_khz }}</td>
+                <td style="font-style: italic;">{{ hasil.h1_mhz or '-' }}</td>
+                <td>{{ hasil.h1_dbm or '-' }}</td>
+                <td style="background: #f0f7ff;">{{ hasil.h1_db or '-' }}</td>
+                <td style="font-style: italic;">{{ hasil.h2_mhz or '-' }}</td>
+                <td>{{ hasil.h2_dbm or '-' }}</td>
+                <td style="background: #f0f7ff;">{{ hasil.h2_db or '-' }}</td>
+                <td style="font-style: italic;">{{ hasil.h3_mhz or '-' }}</td>
+                <td>{{ hasil.h3_dbm or '-' }}</td>
+                <td style="background: #f0f7ff;">{{ hasil.h3_db or '-' }}</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<!-- HASIL KESIMPULAN AUDIT HUKUM LLM (JIKA SUDAH DIPROSES) -->
+{% if hasil and hasil.catatan_llm %}
+<div style="background: white; border: 1px solid var(--border-color); padding: 20px; margin-bottom: 20px; border-radius: 2px;">
+    <h3 style="margin-top: 0; color: #003366; font-size: 15px; border-bottom: 2px solid var(--mc-green); padding-bottom: 6px; margin-bottom: 15px;">
+        Laporan Hasil Analisis Hukum & Audit Teknis AI (Local LLM)
+    </h3>
+    <div style="font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #222; background: #fafafa; padding: 15px; border: 1px solid #eee; border-left: 4px solid var(--mc-green);">{{ hasil.catatan_llm }}</div>
+</div>
+{% endif %}
+
+<!-- TOMBOL AKSI UNTUK USER -->
+<div style="background: white; border: 1px solid var(--border-color); padding: 15px; border-radius: 2px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+        <button type="button" hx-post="/sesi/hapus/{{ sesi.session_uuid }}" hx-target="#main-content" hx-confirm="Yakin ingin menghapus sesi pengukuran ini?"
+            style="background-color: #cc0000; color: white; border: none; padding: 9px 18px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+            Hapus Sesi Ini
+        </button>
+    </div>
+
+    <div style="display: flex; gap: 10px;">
+        <a href="/upload-file" hx-get="/upload-file" hx-target="#main-content" hx-push-url="true"
+            style="background-color: #777777; color: white; border: none; padding: 9px 18px; font-weight: bold; cursor: pointer; font-size: 13px; text-decoration: none; border-radius: 2px;">
+            Ganti File / Upload Ulang
+        </a>
+
+        {% if sesi.status == 'parsed' or sesi.status == 'completed' %}
+            <!-- OPSI VALID: Tombol Aktif Memicu Job LLM -->
+            <button type="button" hx-post="/sesi/analisis-ai/{{ sesi.session_uuid }}" hx-target="#main-content"
+                style="background-color: var(--mc-green); color: white; border: none; padding: 9px 18px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+                Lanjutkan ke Analisis AI (LLM) →
+            </button>
+        {% elif sesi.status == 'warning_mismatch' %}
+            <!-- OPSI TIDAK VALID: Tombol Greyed Out / Disabled dengan Pop Up Alert -->
+            <button type="button" onclick="alert('Tolong cek file yang di-upload atau stasiun radio yang Anda pilih! Frekuensi stasiun radio dari database ({{ sesi.stasiun.frekuensi_mhz }} MHz) dan dari file yang Anda upload tidak sesuai.')"
+                style="background-color: #cccccc; color: #666666; border: 1px solid #bbbbbb; padding: 9px 18px; font-weight: bold; cursor: not-allowed; font-size: 13px; border-radius: 2px;" title="Frekuensi tidak sesuai dengan master data">
+                Lanjutkan ke Analisis AI (LLM) (Disabled)
+            </button>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

@@ -41,26 +41,32 @@
                             tanpa refresh halaman
                         preload: men download halaman ini otomatis jika kursor mouse lewat  
                         -->
-                    <a href="dashboard" hx-get="/dashboard" hx-target="#main-content" hx-push-url="true"
-                        preload="mouseover">
+                <!-- Menu 1: Dashboard Status -->
+                <li>
+                    <a href="/dashboard" hx-get="/dashboard" hx-target="#main-content" hx-push-url="true" preload="mouseover">
                         <span class="icon">D</span>
                         <span class="text">Dashboard Status</span>
                     </a>
                 </li>
-                <!-- tombol 2 daftar radio-->
+                <!-- Menu 2: Master Data Daftar Radio -->
                 <li>
-                    <a href="/daftar-radio" hx-get="/daftar-radio" hx-target="#main-content" hx-push-url="true"
-                        preload="mouseover">
+                    <a href="/daftar-radio" hx-get="/daftar-radio" hx-target="#main-content" hx-push-url="true" preload="mouseover">
                         <span class="icon">R</span>
                         <span class="text">Daftar Radio</span>
                     </a>
                 </li>
-                <!-- sesi pengukuran-->
+                <!-- Menu 3: Halaman Upload 6 File Baru -->
                 <li>
-                    <a href="/sesi-pengukuran" hx-get="/sesi-pengukuran" hx-target="#main-content" hx-push-url="true"
-                        preload="mouseover">
+                    <a href="/upload-file" hx-get="/upload-file" hx-target="#main-content" hx-push-url="true" preload="mouseover">
+                        <span class="icon">U</span>
+                        <span class="text">Upload File</span>
+                    </a>
+                </li>
+                <!-- Menu 4: Riwayat Sesi & AI Harness -->
+                <li>
+                    <a href="/sesi-pengukuran" hx-get="/sesi-pengukuran" hx-target="#main-content" hx-push-url="true" preload="mouseover">
                         <span class="icon">S</span>
-                        <span class="text">Sesi Pengukuran</span>
+                        <span class="text">Sesi & AI Harness</span>
                     </a>
                 </li>
             </ul>

@@ -31,6 +31,8 @@ class Config:
         print(f"FATAL ERROR: Variabel environment berikut belum diisi di .env: {', '.join(missing)}")
         sys.exit(1)
 
+    SECRET_KEY = os.getenv("SECRET_KEY", os.getenv("SECRETE_KEY", "balmon-sfr-secret-key-1234567890"))
+
     # sqlalchemy tetap di pakai unutk koneksi utama yang dipakai oleh flask-sqlalchemy
     SQLALCHEMY_DATABASE_URI = f"postgresql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
     SQLALCHEMY_TRACK_MODIFICATIONS = False
