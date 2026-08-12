@@ -1,0 +1,17 @@
+{% if not request.headers.get('HX-Request') %}
+    {% extends "base.html" %}
+{% endif %}
+
+{% block content %}
+    <h2>System Status Dashboard</h2>
+    <p>Selamat datang di panel admin Balmon SFR Kelas I Surabaya</p>
+
+    <div style="margin-top: 20px; padding: 15px; border: 1px solid var(--mc-green); background: white;">
+        <h3 style="color: var(--mc-green);">✔ Semua Layanan Sehat</h3>
+        <ul style="margin-top: 10px; margin-left:20px">
+            <li>Database PostgresSQL: <span style="color: green; font-weight: bold;">Online</span>
+            </li>
+            <li>MinIO Storage: <span style="color: green; font-weight: bold;">Standby</span></li>
+        </ul>
+    </div>
+{% endblock %}

@@ -25,3 +25,13 @@ logs/
 # Docker
 # (Jangan ignore docker-compose.yml karena butuh di repo)
 docker-compose.override.yml
+
+implementation_plan.md
+SPA AW Development v2.txt
+SPA AW Development.txt
+spesifikasi_arsitektur_v2.md
+step by step development.txt
+plan.md
+plan sementara.md
+
+old_extraction_code/

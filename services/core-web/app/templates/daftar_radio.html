@@ -1,0 +1,161 @@
+<!-- 
+logika html yang terpnting:
+jika halaman ini di klik dai menu sidebar (hx-request) =true
+flask hanya akan mencetak tabel
+
+tapi jika user iseng menekan f5 atau refresh (bukan hx-request)
+flask aan membungkus ulang dengan base.html
+-->
+
+{% if not request.headers.get('HX-Request') %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block content %}
+<h2 style="margin-bottom: 5px; color: var(--text-color);">Daftar Radio Balmon SFR Kelas I Surabaya</h2>
+<p style="margin-bottom: 15px; color: #555;">Kelola daftar stasiun radio untuk pembuatan sesi pengukuran spectrum
+    analyzer.</p>
+
+<!-- Kotak Form Tambah / Edit Stasiun Radio (Satu Struktur Form Utuh) -->
+<div
+    style="background: white; border: 1px solid var(--border-color); padding: 15px; margin-bottom: 20px; border-radius: 2px;">
+
+    <!-- 1. Judul Dinamis berdasarkan Mode (Edit vs Tambah) -->
+    <h3 style="margin-bottom: 10px; color: var(--mc-green); font-size: 14px;">
+        {% if radio_edit %}+ Edit Stasiun Radio{% else %}+ Tambah Stasiun Radio Baru{% endif %}
+    </h3>
+
+    <!-- 2. Tag Form Tunggal dengan URL hx-post Dinamis -->
+    <form hx-post="{% if radio_edit %}/daftar-radio/update/{{ radio_edit.id }}{% else %}/daftar-radio/tambah{% endif %}"
+        hx-target="#main-content" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+
+        <!-- Field 1: Nama Penyelenggara -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Nama Penyelenggara *</label>
+            <input type="text" name="nama_penyelenggara"
+                value="{{ radio_edit.nama_penyelenggara if radio_edit else '' }}"
+                placeholder="Contoh: PT. Radio Suara Mitra" required
+                style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+        </div>
+
+        <!-- Field 2: Nama Stasiun -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Nama Stasiun *</label>
+            <input type="text" name="nama_stasiun" value="{{ radio_edit.nama_stasiun if radio_edit else '' }}"
+                placeholder="Contoh: Mitra 97 FM" required
+                style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+        </div>
+
+        <!-- Field 3: Kabupaten / Kota (Dengan Autocomplete Datalist) -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Kabupaten / Kota *</label>
+            <input type="text" name="kab_kota" list="list_kab_kota"
+                value="{{ radio_edit.kab_kota if radio_edit else '' }}" placeholder="Contoh: Batu" required
+                style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+            <datalist id="list_kab_kota">
+                {% for kota in kab_kota_options %}
+                <option value="{{ kota }}"></option>
+                {% endfor %}
+            </datalist>
+        </div>
+
+        <!-- Field 4: Sub Servis (Dengan Autocomplete Datalist) -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Sub Servis *</label>
+            <input type="text" name="sub_servis" list="list_sub_servis"
+                value="{{ radio_edit.sub_servis if radio_edit else '' }}" placeholder="Contoh: Radio Penyiaran FM"
+                required style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+            <datalist id="list_sub_servis">
+                {% for servis in sub_servis_options %}
+                <option value="{{ servis }}"></option>
+                {% endfor %}
+            </datalist>
+        </div>
+
+        <!-- Field 5: Kanal -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Kanal *</label>
+            <input type="text" name="kanal" value="{{ radio_edit.kanal if radio_edit else '' }}"
+                placeholder="Contoh: 95" required
+                style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+        </div>
+
+        <!-- Field 6: Frekuensi -->
+        <div>
+            <label style="display: block; margin-bottom: 4px; font-weight: bold;">Frekuensi (MHz) *</label>
+            <input type="number" step="0.01" name="frekuensi_mhz"
+                value="{{ radio_edit.frekuensi_mhz if radio_edit else '' }}" placeholder="Contoh: 97.00" required
+                style="width: 100%; padding: 6px; border: 1px solid var(--border-color); font-size: 13px;">
+        </div>
+
+        <!-- 3. Tombol Aksi Dinamis (Sesuai Gambar 1 & Gambar 2 Anda) -->
+        <div
+            style="grid-column: span 3; text-align: right; margin-top: 5px; display: flex; justify-content: flex-end; gap: 8px;">
+            {% if radio_edit %}
+            <!-- Mode Edit (Gambar 1): Tombol Hapus (Merah), Batal (Abu-abu), Simpan Perubahan (Hijau) -->
+            <button type="button" hx-post="/daftar-radio/hapus/{{ radio_edit.id }}" hx-target="#main-content"
+                hx-confirm="Yakin ingin menghapus {{ radio_edit.nama_stasiun }}?"
+                style="background-color: #cc0000; color: white; border: none; padding: 7px 15px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+                Hapus
+            </button>
+            <button type="button" hx-get="/daftar-radio" hx-target="#main-content"
+                style="background-color: #777777; color: white; border: none; padding: 7px 15px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+                Batal
+            </button>
+            <button type="submit"
+                style="background-color: var(--mc-green); color: white; border: none; padding: 7px 15px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+                + Simpan Perubahan Ke Database
+            </button>
+            {% else %}
+            <!-- Mode Tambah Baru (Gambar 2): Hanya Tombol Simpan Ke Database (Hijau) -->
+            <button type="submit"
+                style="background-color: var(--mc-green); color: white; border: none; padding: 7px 15px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+                + Simpan Ke Database
+            </button>
+            {% endif %}
+        </div>
+
+    </form>
+</div>
+
+<!-- Tabel Data Dinamis dari PostgreSQL -->
+<table class="data-table">
+    <thead>
+        <tr>
+            <th style="width: 40px; text-align: center;">No</th>
+            <th>Nama Penyelenggara</th>
+            <th>Nama Stasiun</th>
+            <th>Kab/Kota</th>
+            <th>Sub Servis</th>
+            <th>Kanal</th>
+            <th>Frekuensi</th>
+            <th style="width: 80px; text-align: center;">Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for radio in stasiun_list %}
+        <tr {% if radio_edit and radio_edit.id==radio.id %}style="background-color: var(--mc-yellow);" {% endif %}>
+            <td style="text-align: center;">{{ loop.index }}</td>
+            <td><strong>{{ radio.nama_penyelenggara }}</strong></td>
+            <td>{{ radio.nama_stasiun }}</td>
+            <td>{{ radio.kab_kota }}</td>
+            <td>{{ radio.sub_servis or '-' }}</td>
+            <td>{{ radio.kanal or '-' }}</td>
+            <td>{{ radio.frekuensi_mhz }} MHz</td>
+            <td style="text-align: center;">
+                <button hx-get="/daftar-radio/edit/{{ radio.id }}" hx-target="#main-content"
+                    style="background: #0055aa; color: white; border: none; padding: 4px 10px; cursor: pointer; font-size: 12px; border-radius: 2px;">
+                    Edit
+                </button>
+            </td>
+        </tr>
+        {% else %}
+        <tr>
+            <td colspan="8" style="text-align: center; color: #777; padding: 20px;">
+                Belum ada data stasiun radio di database. Silakan isi form di atas untuk menambahkan.
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}

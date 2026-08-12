@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <!-- pengaturan standar utf8 dan setting tampilan hp-->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>SPECTRA</title>
+
+    <!-- memanggil css dari folder static. url_for itu fungsi Flask untuk mencari file statis nya otomatis-->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css')}}">
+
+    <!-- memanggil htmx dan preload dari folder, supaya tidak perlu load dari internet -->
+    <script src="{{ url_for('static', filename='js/htmx.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/preload.js') }}"></script>
+</head>
+
+<!-- atribut hx-ext="preload" mengaktifkan fitur hover over caching-->
+
+<body hx-ext="preload">
+
+    <!-- wadah besar yang memenuhi seluruh layar 100vh itu 100% view height-->
+    <div class="layout-container">
+        <!-- sidebar navigasi-->
+        <nav id="sidebar" class="sidebar">
+            <div class="sidebar-header">
+                <h2>Balmon SFR</h2>
+                <!-- tombol garis tiga untuk melipat sidebar -->
+                <button id="toggle-btn" class="toggle-btn">☰</button>
+            </div>
+
+            <ul class="nav-list">
+                <li> <!-- tambah tombol nanti di sini buat di side bar-->
+                    <!-- 
+                        kote htmx inti
+                         href: url, jaga jaga kalau user mematikan js
+                         hx-get: url yang diminta sevrer flask
+                         hx-target: tempat dimana hasil halamannya akan di suntikan
+                            (di div id='main-content')
+                        hx-push-url: membuat url di browser berubah (misal jadi /dashboard) 
+                            tanpa refresh halaman
+                        preload: men download halaman ini otomatis jika kursor mouse lewat  
+                        -->
+                    <a href="dashboard" hx-get="/dashboard" hx-target="#main-content" hx-push-url="true"
+                        preload="mouseover">
+                        <span class="icon">D</span>
+                        <span class="text">Dashboard Status</span>
+                    </a>
+                </li>
+                <!-- tombol 2 daftar radio-->
+                <li>
+                    <a href="/daftar-radio" hx-get="/daftar-radio" hx-target="#main-content" hx-push-url="true"
+                        preload="mouseover">
+                        <span class="icon">R</span>
+                        <span class="text">Daftar Radio</span>
+                    </a>
+                </li>
+                <!-- sesi pengukuran-->
+                <li>
+                    <a href="/sesi-pengukuran" hx-get="/sesi-pengukuran" hx-target="#main-content" hx-push-url="true"
+                        preload="mouseover">
+                        <span class="icon">S</span>
+                        <span class="text">Sesi Pengukuran</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- konten utama yang sebelah kanan nya sidebar-->
+        <main class="content-area">
+            <!-- header atas (topbar)-->
+            <header class="topbar">
+                <input type="text" placeholder="Cari stasiun atai frekuensi">
+            </header>
+            <!-- tempat kosong (lubang)-->
+            <div id="main-content" class="content-wrapper">
+
+                <!-- Flask memasukkan isi dari dashboard.html atau daftar_radio.html di blok ini-->
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+
+    <!-- script javasctip. kalau tombol di klik tambahan class "collapsed" ke sidebar agar menyempit
+         -->
+
+    <script>
+        document.getElementById('toggle-btn').addEventListener('click', function () {
+            document.getElementById('sidebar').classList.toggle('collapsed');
+        });
+    </script>
+
+</body>
+
+</html>

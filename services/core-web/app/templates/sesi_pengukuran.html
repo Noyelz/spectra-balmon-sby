@@ -1,0 +1,122 @@
+{% if not request.headers.get('HX-Request') %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block content %}
+<h2 style="margin-bottom: 5px; color: var(--text-color);">Buat Sesi Pengukuran Spectrum Analyzer</h2>
+<p style="margin-bottom: 15px; color: #555;">Unggah 3 pasang file pengukuran (.fmspa + gambar bukti) untuk diaudit oleh
+    sistem AI.</p>
+
+<form hx-post="/sesi-pengukuran/upload" hx-target="#upload-status-result" enctype="multipart/form-data"
+    style="background: white; border: 1px solid var(--border-color); padding: 20px; border-radius: 2px;">
+
+    <!-- Bagian 1: Pilih Stasiun Radio -->
+    <div style="margin-bottom: 20px; border-bottom: 1px dashed var(--border-color); padding-bottom: 15px;">
+        <h3 style="color: var(--mc-green); font-size: 14px; margin-bottom: 8px;">1. Pilih Stasiun Radio Audit</h3>
+        <label style="display: block; font-weight: bold; margin-bottom: 5px;">Nama Stasiun Radio *</label>
+
+        <select name="stasiun_id" required hx-get="/api/stasiun-detail/" hx-target="#stasiun-info-box"
+            hx-trigger="change" hx-vals='js:{stasiun_id: event.target.value}'
+            onchange="this.setAttribute('hx-get', '/api/stasiun-detail/' + this.value)"
+            style="width: 100%; padding: 8px; border: 1px solid var(--border-color); font-size: 13px; background: white;">
+            <option value="">-- Pilih Stasiun Radio dari Database --</option>
+            {% for s in stasiun_list %}
+            <option value="{{ s.id }}" {% if selected_stasiun and selected_stasiun.id==s.id %}selected{% endif %}>
+                {{ s.nama_stasiun }} ({{ s.kab_kota }}) - {{ s.frekuensi_mhz }} MHz
+            </option>
+            {% endfor %}
+        </select>
+
+        <div id="stasiun-info-box">
+            {% if selected_stasiun %}
+            <div
+                style="background: #f7f7f7; border: 1px solid var(--border-color); padding: 10px; margin-top: 10px; border-radius: 2px; font-size: 12px;">
+                <strong>Detail Stasiun Terpilih:</strong><br>
+                • Penyelenggara: {{ selected_stasiun.nama_penyelenggara }}<br>
+                • Kab/Kota: {{ selected_stasiun.kab_kota }} | Sub Servis: {{ selected_stasiun.sub_servis or '-' }} |
+                Kanal: {{ selected_stasiun.kanal or '-' }}<br>
+                • Frekuensi: <strong>{{ selected_stasiun.frekuensi_mhz }} MHz</strong>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Bagian 2: Upload 3 Grup File (6 File Wajib) -->
+    <h3 style="color: var(--mc-green); font-size: 14px; margin-bottom: 12px;">2. Unggah 3 Pasang File Pengukuran (6 File
+        Wajib)</h3>
+
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+
+        <!-- Grup 1: OBW (Bandwidth) -->
+        <div style="background: #fcfcfc; border: 1px solid var(--border-color); padding: 12px; border-radius: 2px;">
+            <h4
+                style="margin-top: 0; color: #333; font-size: 13px; border-bottom: 2px solid var(--mc-green); padding-bottom: 4px;">
+                Grup 1: OBW (Bandwidth)</h4>
+
+            <div style="margin-top: 10px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">File Raw OBW (.fmspa) *</label>
+                <input type="file" name="obw_fmspa" accept=".fmspa" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+
+            <div style="margin-top: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">Gambar Bukti OBW (.png/.jpg)
+                    *</label>
+                <input type="file" name="obw_img" accept="image/*" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+        </div>
+
+        <!-- Grup 2: Harmonisa -->
+        <div style="background: #fcfcfc; border: 1px solid var(--border-color); padding: 12px; border-radius: 2px;">
+            <h4
+                style="margin-top: 0; color: #333; font-size: 13px; border-bottom: 2px solid var(--mc-green); padding-bottom: 4px;">
+                Grup 2: Harmonisa</h4>
+
+            <div style="margin-top: 10px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">File Raw Harmonisa (.fmspa) *</label>
+                <input type="file" name="harmonisa_fmspa" accept=".fmspa" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+
+            <div style="margin-top: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">Gambar Bukti Harmonisa (.png/.jpg)
+                    *</label>
+                <input type="file" name="harmonisa_img" accept="image/*" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+        </div>
+
+        <!-- Grup 3: Deviasi -->
+        <div style="background: #fcfcfc; border: 1px solid var(--border-color); padding: 12px; border-radius: 2px;">
+            <h4
+                style="margin-top: 0; color: #333; font-size: 13px; border-bottom: 2px solid var(--mc-green); padding-bottom: 4px;">
+                Grup 3: Deviasi</h4>
+
+            <div style="margin-top: 10px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">File Raw Deviasi (.fmspa) *</label>
+                <input type="file" name="deviasi_fmspa" accept=".fmspa" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+
+            <div style="margin-top: 12px;">
+                <label style="display: block; font-size: 12px; font-weight: bold;">Gambar Bukti Deviasi (.png/.jpg)
+                    *</label>
+                <input type="file" name="deviasi_img" accept="image/*" required
+                    style="width: 100%; margin-top: 4px; font-size: 11px;">
+            </div>
+        </div>
+
+    </div>
+
+    <div style="text-align: right;">
+        <button type="submit"
+            style="background-color: var(--mc-green); color: white; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; font-size: 13px; border-radius: 2px;">
+            + Mulai Sesi & Upload 6 File ke Storage
+        </button>
+    </div>
+
+</form>
+
+<div id="upload-status-result"></div>
+{% endblock %}

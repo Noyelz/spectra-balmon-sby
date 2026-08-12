@@ -1,0 +1,183 @@
+/* 
+:root, tempat menyimpan variabel warna nanti bisa diubah
+*/
+:root {
+    --mc-green: #006633;
+    --mc-yellow: #f8e58f;
+    --bg-color: #f7f7f7;
+    --border-color: #cccccc;
+    --text-color: #222222;
+    --sidebar-width: 230px;
+    --sidebar-collapsed-width:50px
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-size: 13px;
+}
+/* .layout-container untuk mengatruh agar tinggi layout persis 100% layar (tidak kurang
+tidak lebih), 
+dan overflow: hidden mematika scroll dari ujung ke ujung
+(scroll hanya ada di dalam kotak tabel nanti) */
+.layout-container {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* sidebar defaultnya selebar 230px.
+kalau nanti ada class collapsed, ubah jadi 50 px
+Transition membuat perubahan lebarnya menjadi animasi 
+(jadi tidak patah-patah) */
+
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: white;
+    border-right: 1px solid var(--border-color);
+    transition: width 0.15s ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar.collapsed {
+    width: var(--sidebar-collapsed-width);
+}
+
+.sidebar-header {
+    height: 40px;
+    background-color: var(--mc-green);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+}
+.sidebar-header h2 {
+    font-size: 14px;
+    white-space: nowrap;
+    overflow:hidden;
+}
+
+/* saat sidebar di tekan/collapsed, nanti menyembunyikn tulisan yang
+H2 dan nama menunya biar akonnya saja yang terlihat
+*/
+.sidebar.collapsed .sidebar-header h2 { display: none;}
+
+.toggle-btn{
+    background: none;
+    border: none;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.nav-list { list-style: none; }
+
+.nav-list li a {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    text-decoration: none;
+    color: var(--text-color);
+    border-bottom: 1px solid #eeeeee;
+}
+
+.nav-list li a:hover { background-color: var(--mc-yellow); }
+
+.nav-list .icon {
+    font-size: 16px;
+    min-width: 25px;
+}
+
+.sidebar.collapsed .nav-list .text {display: none; }
+
+.content-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.topbar {
+    height: 40px;
+    background-color: white;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+}
+
+.topbar input {
+    padding: 4px 8px;
+    border: 1px solid var(--border-color);
+    width: 300px;
+    font-size: 13px;
+}
+
+.content-wrapper {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border: 1px solid var(--border-color);
+    margin-top: 10px;
+}
+
+.data-table th, .data-table td {
+    padding: 6px 10px;
+    border: 1px solid var(--border-color);
+    text-align: left;
+}
+
+.data-table th {
+    background-color: #e5e5e5;
+    font-weight: bold;
+}
+
+/*
+.sidebar.collapsed .nav-list .text { display: none;}
+
+
+/* saat mouse hover diatas opsi meni, nanti mengubah background menjadi kuning
+*/
+
+/*
+.nav-list li a:hover {
+    background-color: var(--mc-yellow);
+}
+
+/* kotak konten utama: overflow-y: auto mengizinkan scroll vertikal
+Hanya di bagian tabelnya saja, bukan seluruh layar web*/
+
+/*
+.content-wrapper {
+    padding: 15px;
+    overflow-y: auto;
+    flex-grow: 1;
+}
+
+/* gaya tabel nanti kotak putih bergasi abu abu, judul nya abu abu tua
+*/
+
+/*
+.data-table {
+    width: 100%;
+    border-collapse: collapse; /* menghapus celat putih antar kotak tabel*/
+    /*
+    border: 1px solid var(--border-color);
+}
+
+.data-table th { background-color: #e5e5e5; font-weight: bold;}
+
