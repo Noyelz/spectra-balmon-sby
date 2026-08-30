@@ -1,3 +1,4 @@
+import json
 import os
 import httpx
 from openai import OpenAI
@@ -27,6 +28,26 @@ def get_active_model_name(client):
         print(f"!GAGAL MENDETEKSI MODEL LM Studio: {e}")
     return LLM_MODEL
 
+# DEFINISI TOOL AGENTIC RAG (Fungsi Pencarian ChromaDB yang Bisa Dipanggil AI)
+TOOLS_SCHEMA = [
+    {
+        "type": "function",
+        "function": {
+            "name": "query_rag_regulations",
+            "description": "Mencari pasal/ayat regulasi spektrum frekuensi radio FM di ChromaDB berdasarkan kata kunci spesifik.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query_text": {
+                        "type": "string",
+                        "description": "Kata kunci pencarian regulasi, misal: 'Batas OBW FM' atau 'Kanal frekuensi Kota Batu Permen 5/2023'"
+                    }
+                },
+                "required": ["query_text"]
+            }
+        }
+    }
+]
 
 def generate_balmon_audit_analysis(stasiun_name, freq_master, data_13_kolom):
     """
@@ -34,14 +55,11 @@ def generate_balmon_audit_analysis(stasiun_name, freq_master, data_13_kolom):
     pengukuran ke lm studio (local llm) untuk analisis kesimpulan hukum teknis.
     """
     try:
-        #1 menyiapkan kuery rag vektor berdasarkan parameter ukur
-        rag_query = f"Standar batas toleransi frekuensi FM {freq_master} Mhz deviasi {data_13_kolom.get('deviasi_khz')} kHz bandwidth OBW {data_13_kolom.get('band_width_khz')} kHz attenuasi harmonisa"
-        
-        #2 mengambil konteks regulasi relevan dari chromadb
-        rag_context = query_rag_regulations(rag_query, n_results=3)
+        rag_query_initial = f"Pasal 16 parameter teknis bandwidth 300 kHz deviasi 75 kHz FM {freq_master} MHz"
+        rag_context = query_rag_regulations(rag_query_initial, n_results=7)
 
         # Inisialisasi Klien OpenAI yang mengarah ke IP LM Studio Local
-        http_client = httpx.Client(trust_env=False, timeout=120.0)
+        http_client = httpx.Client(trust_env=False, timeout=600.0)
         client = OpenAI(
             base_url=LLM_BASE_URL,
             api_key=LLM_API_KEY,
@@ -52,14 +70,16 @@ def generate_balmon_audit_analysis(stasiun_name, freq_master, data_13_kolom):
 
         system_prompt = f"""
 Anda adalah Sistem Pakar Auditor Spektrum Frekuensi Radio (Balmon SFR) Kementerian Komunikasi dan Digital RI.
-Tugas Anda adalah melakukan verifikasi teknis dan analisis kepatuhan hukum atas hasil pengukuran spectrum analyzer stasiun radio FM.
-Aturan Evaluasi Teknis:
-1. Frekuensi Terukur vs Master: Toleransi pergeseran frekuensi carrier maksimal 0.5 MHz.
-2. Peak Deviasi: Standar maksimal deviasi FM adalah 75.0 kHz (PMKG / Perdirjen SDPPI).
-3. Bandwidth (OBW): Standar lebar pita FM adalah 200.0 kHz.
-4. Attenuasi Harmonisa (H1, H2, H3): Nilai relatif H(dB) = |Level_dBm - H_dBm| idealnya >= 40 dB atau sesuai ketentuan teknis.
-KONTEKS REGULASI HUKUM RELEVAN (DARI RAG VECTOR DATABASE CHROMADB):
-{rag_context}
+Tugas Anda:
+1. Analisis data hasil pengukuran spectrum analyzer stasiun radio FM {stasiun_name} (Frekuensi {freq_master} MHz, Wilayah {data_13_kolom.get('kab_kota', 'Jawa Timur')}).
+2. ANDA WAJIB MENCARI SENDIRI pasal regulasi yang relevan di ChromaDB menggunakan tool `query_rag_regulations`.
+   - Cari standar batas toleransi OBW dan Deviasi FM.
+   - Cari alokasi kanal frekuensi resmi untuk wilayah tersebut.
+3. Setelah mendapatkan pasal-pasal dari ChromaDB, susun laporan audit resmi mencakup:
+   - Status Kepatuhan Teknis (Sesuai / Melanggar)
+   - Catatan Penyimpangan Parameter (jika ada)
+   - Referensi Regulasi Hukum yang Dilanggar / Dipatuhi (HANYA dari ChromaDB)
+   - Rekomendasi Tindakan Operasional Balmon
 Instruksi Tambahan:
 - Langsung berikan hasil analisis tanpa menuliskan ulang proses berpikir internal Anda.
 Berikan jawaban profesional ringkas mencakup:
@@ -68,6 +88,7 @@ Berikan jawaban profesional ringkas mencakup:
 - Referensi Regulasi Hukum yang Dilanggar / Dipatuhi
 - Rekomendasi Tindakan Operasional Balmon
 - WAJIB HANYA mengutip pasal/regulasi yang tercantum di dalam KONTEKS REGULASI HUKUM RELEVAN (DARI RAG VECTOR DATABASE CHROMADB). DILARANG mengutip Undang-Undang atau peraturan luar yang tidak ada di dalam konteks RAG yang diberikan.
+- DILARANG melakukan proses berpikir internal yang panjang. Langsung berikan hasil analisis secara ringkas dan cepat.
 """
 
         user_content = f"""
@@ -83,27 +104,60 @@ DATA HARMONISA RELATIF:
 - Harmonisa H3: {data_13_kolom.get('h3_mhz')} MHz | Level: {data_13_kolom.get('h3_dbm')} dBm | Attenuasi: {data_13_kolom.get('h3_db')} dB
 Silakan berikan analisis audit teknis dan rekomendasi secara lengkap!
 """
-        # token di naikkan (jangan 1000 untuk thinking model)
-        response = client.chat.completions.create(
-            model=target_model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_content}
-            ],
-            temperature=0.3,
-            max_tokens=6400
-        )
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content}
+        ]
+        collected_rag_contexts = [rag_context]
+        # LOOP AGENTIC RAG (Maksimal 3x Putaran untuk Self-Correction & Re-Checking ke ChromaDB)
+        for turn in range(3):
+            try:
+                response = client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    tools=TOOLS_SCHEMA,
+                    tool_choice="auto",
+                    temperature=0.3,
+                    max_tokens=6400
+                )
+            except Exception:
+                # Fallback jika model LM Studio tidak mendukung fitur Tool-Use
+                response = client.chat.completions.create(
+                    model=target_model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=6400
+                )
+            choice_message = response.choices[0].message
+            messages.append(choice_message)
+            # Cek apakah AI meminta pencarian pasal RAG tambahan (Tool Call)?
+            if getattr(choice_message, 'tool_calls', None):
+                for tool_call in choice_message.tool_calls:
+                    if tool_call.function.name == "query_rag_regulations":
+                        try:
+                            args = json.loads(tool_call.function.arguments)
+                            search_keyword = args.get("query_text", "")
+                        except Exception:
+                            search_keyword = rag_query_initial
+                        print(f"[Agentic RAG Turn {turn+1}] AI mengecek kembali ChromaDB dengan kata kunci: '{search_keyword}'")
+                        additional_context = query_rag_regulations(search_keyword, n_results=2)
+                        if additional_context not in collected_rag_contexts:
+                            collected_rag_contexts.append(additional_context)
 
-        choice_message = response.choices[0].message
-        content = choice_message.content or ""
-
-        # fallback jika 'content' kosong tapi ada 'reasoning content'
-
-        if not content.strip() and hasattr(choice_message, 'reasoning_content') and choice_message.reasoning_content:
-            content = choice_message.reasoning_content
-
-        return content
-
+                        # Mengembalikan hasil pencarian pasal baru ke AI
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": additional_context
+                        })
+            else:
+                # Jika AI tidak memanggil tool lagi, berarti AI sudah yakin dengan pasal yang dipegang
+                break
+        final_content = choice_message.content or ""
+        if not final_content.strip() and hasattr(choice_message, 'reasoning_content') and choice_message.reasoning_content:
+            final_content = choice_message.reasoning_content
+        all_rag_str = "\n\n".join(collected_rag_contexts)
+        return f"**DOKUMEN PASAL REGULASI HASIL AGENTIC RAG SEARCH (CHROMADB):**\n{all_rag_str}\n\n=======================================================\n\n{final_content}"
     except Exception as e:
-        print(f"ERROR saat memanggil Local LLM (LM Studio): {e}")
-        return f"Gagal mendapatkan respon dari AI LLM: {e}"
+        print(f"ERROR PADA KLIEN AGENTIC LLM: {e}")
+        return f"Gagal mendapatkan respon dari Agentic Local LLM: {e}"

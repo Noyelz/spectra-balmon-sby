@@ -102,9 +102,7 @@ def hapus_radio(id):
 
     return redirect(url_for('main.daftar_radio'))
 
-# ---------------------------------------------------------
 # RUTE MODULE UPLOAD & SESI PENGUKURAN (6 FILE MINIO)
-# ---------------------------------------------------------
 
 # 1. Halaman Khusus Form Upload File (.fmspa + gambar)
 @main_bp.route('/upload-file', methods=['GET'])
@@ -197,9 +195,9 @@ def simpan_sesi_pengukuran():
         redis_conn = Redis.from_url(REDIS_URL)
         q = Queue('parse_xml_tasks', connection=redis_conn)
         q.enqueue('worker.process_xml_parsing_job', session_id)
-        print(f"✅ Job parsing {session_id} berhasil dikirim ke Redis Queue.")
+        print(f"Job parsing {session_id} berhasil dikirim ke Redis Queue.")
     except Exception as e:
-        print(f"⚠️ Redis Enqueue Warning: {e}")
+        print(f"Redis Enqueue Warning: {e}")
 
     # Langsung arahkan ke Halaman Detail Sesi Pengukuran
     return redirect(url_for('main.sesi_detail_view', session_uuid=session_id))
@@ -208,7 +206,10 @@ def simpan_sesi_pengukuran():
 @main_bp.route('/sesi/detail/<session_uuid>', methods=['GET'])
 def sesi_detail_view(session_uuid):
     sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+        .filter(HasilPengukuran.catatan_llm != None)\
+        .order_by(HasilPengukuran.id.desc()).first() or \
+        HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
     return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
 
 # 5. Rute untuk Menghapus Sesi Pengukuran (POST)
@@ -228,7 +229,7 @@ def pemicu_analisis_ai(session_uuid):
     # Memicu Job ke Redis Queue 'llm_tasks' untuk diproses oleh Worker AI Harness
     REDIS_URL = os.getenv("REDIS_URL", "redis://127.0.0.1:6379/0")
 
-    # 🔍 Verifikasi apakah ada AI Harness Worker yang aktif sebelum merubah status sesi
+    # Verifikasi apakah ada AI Harness Worker yang aktif sebelum merubah status sesi
     try:
         from redis import Redis
         from rq import Worker
@@ -236,7 +237,7 @@ def pemicu_analisis_ai(session_uuid):
         workers = Worker.all(connection=redis_conn)
         ai_worker_active = any('llm_tasks' in [q.name for q in w.queues] for w in workers)
     except Exception as e:
-        print(f"⚠️ Gagal memverifikasi status AI Harness Worker: {e}")
+        print(f"Gagal memverifikasi status AI Harness Worker: {e}")
         ai_worker_active = False
 
     if not ai_worker_active:
@@ -253,9 +254,9 @@ def pemicu_analisis_ai(session_uuid):
         redis_conn = Redis.from_url(REDIS_URL)
         q = Queue('llm_tasks', connection=redis_conn)
         q.enqueue('worker.process_llm_analysis_job', session_uuid)
-        print(f"🤖 Job LLM {session_uuid} berhasil dikirim ke Redis Queue 'llm_tasks'.")
+        print(f"Job LLM {session_uuid} berhasil dikirim ke Redis Queue 'llm_tasks'.")
     except Exception as e:
-        print(f"⚠️ Redis Enqueue LLM Warning: {e}")
+        print(f"Redis Enqueue LLM Warning: {e}")
 
     hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
     return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
@@ -304,3 +305,91 @@ def export_pdf():
         as_attachment=True,
         download_name='Laporan_Hasil_Pengukuran_Balmon_SFR.pdf'
     )
+
+
+# endpoint internal API untuk telegram bot (satu jalur saja walau microservices)
+
+@main_bp.route('/api/internal/telegram/stasiun', methods=['GET'])
+def api_telegram_cari_stasiun():
+    """Mencari data master stasiun radio berdasarkan nama atau frekuensi"""
+    query = request.args.get('q', '').strip()
+    if not query:
+        return {"status": "error", "message": "Parameter pencarian 'q' diperlukan"}, 400
+
+    # Cari berdasarkan kecocokan nama stasiun, kota, atau frekuensi
+    try:
+        freq_float = float(query)
+        stasiun_list = StasiunRadio.query.filter(
+            (StasiunRadio.frekuensi_mhz == freq_float) |
+            (StasiunRadio.nama_stasiun.ilike(f"%{query}%")) |
+            (StasiunRadio.kab_kota.ilike(f"%{query}%"))
+        ).limit(5).all()
+    except ValueError:
+        stasiun_list = StasiunRadio.query.filter(
+            (StasiunRadio.nama_stasiun.ilike(f"%{query}%")) |
+            (StasiunRadio.kab_kota.ilike(f"%{query}%"))
+        ).limit(5).all()
+    data = []
+    for s in stasiun_list:
+        hasil = HasilPengukuran.query.filter_by(stasiun_id=s.id).order_by(HasilPengukuran.id.desc()).first()
+        data.append({
+            "id": s.id,
+            "nama_stasiun": s.nama_stasiun,
+            "penyelenggara": s.nama_penyelenggara,
+            "kab_kota": s.kab_kota,
+            "frekuensi_mhz": s.frekuensi_mhz,
+            "kanal": s.kanal or "-",
+            "sub_servis": s.sub_servis or "-",
+            "hasil_terakhir": {
+                "tanggal": hasil.tanggal_pengukuran.strftime('%d-%m-%Y') if hasil and hasil.tanggal_pengukuran else "-",
+                "obw_khz": hasil.band_width_khz if hasil else None,
+                "deviasi_khz": hasil.deviasi_khz if hasil else None,
+                "level_dbm": hasil.level_dbm if hasil else None
+            } if hasil else None
+        })
+    return {"status": "success", "total": len(data), "data": data}, 200
+@main_bp.route('/api/internal/telegram/sesi-terbaru', methods=['GET'])
+def api_telegram_sesi_terbaru():
+    """Mengambil riwayat 5 sesi pengukuran terbaru untuk Telegram"""
+    sesi_list = MeasurementSession.query.order_by(MeasurementSession.id.desc()).limit(5).all()
+    data = []
+    for sesi in sesi_list:
+        stasiun = StasiunRadio.query.get(sesi.stasiun_id)
+        hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        data.append({
+            "session_uuid": sesi.session_uuid,
+            "nama_stasiun": stasiun.nama_stasiun if stasiun else "Tidak Diketahui",
+            "frekuensi_mhz": stasiun.frekuensi_mhz if stasiun else "-",
+            "kab_kota": stasiun.kab_kota if stasiun else "-",
+            "status": sesi.status,
+            "tanggal": sesi.created_at.strftime('%d-%m-%Y %H:%M') if sesi.created_at else "-",
+            "ada_catatan_llm": bool(hasil and hasil.catatan_llm)
+        })
+    return {"status": "success", "data": data}, 200
+@main_bp.route('/api/internal/telegram/laporan/<session_uuid>', methods=['GET'])
+def api_telegram_detail_laporan(session_uuid):
+    """Mengambil detail laporan audit AI sesi tertentu untuk dikirim ke chat Telegram"""
+    sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first()
+    if not sesi:
+        return {"status": "error", "message": "Sesi tidak ditemukan"}, 404
+    stasiun = StasiunRadio.query.get(sesi.stasiun_id)
+    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+        .filter(HasilPengukuran.catatan_llm != None)\
+        .order_by(HasilPengukuran.id.desc()).first() or \
+        HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    return {
+        "status": "success",
+        "session_uuid": sesi.session_uuid,
+        "stasiun": {
+            "nama_stasiun": stasiun.nama_stasiun if stasiun else "-",
+            "penyelenggara": stasiun.nama_penyelenggara if stasiun else "-",
+            "frekuensi_mhz": stasiun.frekuensi_mhz if stasiun else "-",
+            "kab_kota": stasiun.kab_kota if stasiun else "-"
+        },
+        "pengukuran": {
+            "obw_khz": hasil.band_width_khz if hasil else "-",
+            "deviasi_khz": hasil.deviasi_khz if hasil else "-",
+            "level_dbm": hasil.level_dbm if hasil else "-"
+        } if hasil else None,
+        "catatan_llm": hasil.catatan_llm if hasil and hasil.catatan_llm else "Laporan Audit AI belum dijalankan atau masih dalam proses."
+    }, 200
