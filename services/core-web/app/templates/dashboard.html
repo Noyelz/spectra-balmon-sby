@@ -1,17 +1,149 @@
 {% if not request.headers.get('HX-Request') %}
-    {% extends "base.html" %}
+{% extends "base.html" %}
 {% endif %}
 
 {% block content %}
-    <h2>System Status Dashboard</h2>
-    <p>Selamat datang di panel admin Balmon SFR Kelas I Surabaya</p>
-
-    <div style="margin-top: 20px; padding: 15px; border: 1px solid var(--mc-green); background: white;">
-        <h3 style="color: var(--mc-green);">✔ Semua Layanan Sehat</h3>
-        <ul style="margin-top: 10px; margin-left:20px">
-            <li>Database PostgresSQL: <span style="color: green; font-weight: bold;">Online</span>
-            </li>
-            <li>MinIO Storage: <span style="color: green; font-weight: bold;">Standby</span></li>
-        </ul>
+<div
+    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #cbd5e1; padding-bottom: 15px;">
+    <div>
+        <h2 style="margin: 0; color: #1e293b;">Live System Status & Health Dashboard</h2>
+        <p style="margin: 5px 0 0 0; color: #64748b; font-size: 13px;">Pusat Pemantauan Operasional Spektrum Frekuensi
+            Radio — Balai Monitor SFR Kelas I Surabaya</p>
     </div>
+    <div style="display: flex; gap: 10px;">
+        <button onclick="location.reload();" class="btn btn-secondary"
+            style="font-size: 12px; padding: 6px 12px; cursor: pointer;">
+            Refresh Status
+        </button>
+        <a href="{{ url_for('main.upload_file_view') }}" class="btn btn-primary"
+            style="font-size: 12px; padding: 6px 12px; text-decoration: none;">
+            + Upload Sesi Baru
+        </a>
+    </div>
+</div>
+
+<!-- KARTU METRIK KPI UTAMA -->
+<div
+    style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 25px;">
+    <div
+        style="background: white; border: 1px solid #e2e8f0; border-left: 4px solid var(--mc-green, #15803d); padding: 15px; border-radius: 2px;">
+        <div
+            style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">
+            Master Stasiun Radio</div>
+        <div style="font-size: 26px; font-weight: bold; color: #0f172a; margin-top: 5px;">{{ metrics.total_stasiun }}
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Terdaftar di Database</div>
+    </div>
+
+    <div
+        style="background: white; border: 1px solid #e2e8f0; border-left: 4px solid #b45309; padding: 15px; border-radius: 2px;">
+        <div
+            style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">
+            Total Sesi Pengukuran</div>
+        <div style="font-size: 26px; font-weight: bold; color: #0f172a; margin-top: 5px;">{{ metrics.total_sesi }}</div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 4px;">Hasil Ukur Lapangan</div>
+    </div>
+
+    <div
+        style="background: white; border: 1px solid #e2e8f0; border-left: 4px solid #047857; padding: 15px; border-radius: 2px;">
+        <div
+            style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">
+            Selesai Audit AI (LLM)</div>
+        <div style="font-size: 26px; font-weight: bold; color: #0f172a; margin-top: 5px;">{{ metrics.total_selesai_ai }}
+        </div>
+        <div style="font-size: 12px; color: #047857; margin-top: 4px;">Kepatuhan Hukum Terverifikasi</div>
+    </div>
+
+    <div
+        style="background: white; border: 1px solid #e2e8f0; border-left: 4px solid #6d28d9; padding: 15px; border-radius: 2px;">
+        <div
+            style="font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px;">
+            Regulasi RAG Terpasang</div>
+        <div style="font-size: 26px; font-weight: bold; color: #0f172a; margin-top: 5px;">{{ metrics.total_regulasi }}
+        </div>
+        <div style="font-size: 12px; color: #6d28d9; margin-top: 4px;">Permen 5/2023 & Kepmen 570</div>
+    </div>
+</div>
+
+<!-- MATRIKS STATUS KESEHATAN LAYANAN -->
+<h3
+    style="font-size: 14px; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px;">
+    Status Operasional Layanan (Microservices Health Matrix)
+</h3>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 15px;">
+
+    <!-- 1. PostgreSQL -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">Database PostgreSQL</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.postgres.color == 'green' else '#fee2e2' }}; color: {{ '#15803d' if health.postgres.color == 'green' else '#b91c1c' }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.postgres.color == 'green' else '#fca5a5' }};">
+                {{ health.postgres.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.postgres.detail }}</div>
+    </div>
+
+    <!-- 2. Redis & RQ -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">Redis Queue Broker</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.redis.color == 'green' else '#fee2e2' }}; color: {{ '#15803d' if health.redis.color == 'green' else '#b91c1c' }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.redis.color == 'green' else '#fca5a5' }};">
+                {{ health.redis.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.redis.detail }}</div>
+    </div>
+
+    <!-- 3. MinIO -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">MinIO Object Storage</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.minio.color == 'green' else '#fee2e2' }}; color: {{ '#15803d' if health.minio.color == 'green' else '#b91c1c' }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.minio.color == 'green' else '#fca5a5' }};">
+                {{ health.minio.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.minio.detail }}</div>
+    </div>
+
+    <!-- 4. ChromaDB -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">ChromaDB Vector Database</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.chroma.color == 'green' else '#fee2e2' }}; color: {{ '#15803d' if health.chroma.color == 'green' else '#b91c1c' }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.chroma.color == 'green' else '#fca5a5' }};">
+                {{ health.chroma.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.chroma.detail }}</div>
+    </div>
+
+    <!-- 5. LM Studio -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">LM Studio (Local LLM Engine)</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.llm.color == 'green' else ('#fef3c7' if health.llm.color == 'orange' else '#fee2e2') }}; color: {{ '#15803d' if health.llm.color == 'green' else ('#d97706' if health.llm.color == 'orange' else '#b91c1c') }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.llm.color == 'green' else ('#fde68a' if health.llm.color == 'orange' else '#fca5a5') }};">
+                {{ health.llm.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.llm.detail }}</div>
+    </div>
+
+    <!-- 6. Telegram Bot -->
+    <div style="background: white; border: 1px solid #cbd5e1; padding: 12px 15px; border-radius: 2px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <strong style="color: #0f172a; font-size: 13px;">Telegram Bot Service</strong>
+            <span
+                style="background: {{ '#dcfce7' if health.telegram.color == 'green' else '#fef3c7' }}; color: {{ '#15803d' if health.telegram.color == 'green' else '#d97706' }}; font-size: 11px; font-weight: bold; padding: 2px 8px; border-radius: 3px; border: 1px solid {{ '#86efac' if health.telegram.color == 'green' else '#fde68a' }};">
+                {{ health.telegram.status }}
+            </span>
+        </div>
+        <div style="font-size: 12px; color: #64748b; margin-top: 6px;">{{ health.telegram.detail }}</div>
+    </div>
+
+</div>
 {% endblock %}
