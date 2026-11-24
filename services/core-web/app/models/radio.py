@@ -1,6 +1,9 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, timedelta
 
+# Fungsi untuk mengunci waktu ke GMT+7 (WIB)
+def wib_now():
+    return datetime.utcnow() + timedelta(hours=7)
 
 # Tabel 1: data nama stasiun dll
 class StasiunRadio(db.Model):
@@ -34,6 +37,8 @@ class HasilPengukuran(db.Model):
 
     stasiun_id = db.Column(db.Integer, db.ForeignKey('stasiun_radio.id'), nullable=False)
 
+    session_uuid = db.Column(db.String(36)) 
+
     # tanggal pelaksanaan pengukurn lapangan
     tanggal_pengukuran = db.Column(db.Date, nullable=False)
 
@@ -53,5 +58,5 @@ class HasilPengukuran(db.Model):
     keterangan = db.Column(db.Text)
     catatan_llm = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=wib_now)
     

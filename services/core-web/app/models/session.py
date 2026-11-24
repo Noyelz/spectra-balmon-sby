@@ -1,6 +1,10 @@
 from app import db
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
+
+# Fungsi untuk mengunci waktu ke GMT+7 (WIB)
+def wib_now():
+    return datetime.utcnow() + timedelta(hours=7)
 
 class MeasurementSession(db.Model):
     __tablename__ = 'measurement_session'
@@ -12,7 +16,7 @@ class MeasurementSession(db.Model):
     stasiun_id = db.Column(db.Integer, db.ForeignKey('stasiun_radio.id'), nullable=False)
     stasiun = db.relationship('StasiunRadio', backref=db.backref('sessions', lazy=True))
 
-    tanggal_sesi =db.Column(db.DateTime, default=datetime.utcnow)
+    tanggal_sesi = db.Column(db.DateTime, default=wib_now)
     status = db.Column(db.String(50), default='uploaded') # uploaded, parsing, analyzing, completed
 
     # lokasi 6 file di MinIO (3 pasang .fmspa sama gambar .png)
@@ -25,7 +29,7 @@ class MeasurementSession(db.Model):
     deviasi_fmspa_path = db.Column(db.String(255), nullable=False)
     deviasi_img_path = db.Column(db.String(255), nullable=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=wib_now)
 
     def __repr__(self):
         return f"<MeasurementSession {self.session_uuid} - Stasiun {self.stasiun_id}>"

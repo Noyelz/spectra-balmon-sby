@@ -297,7 +297,7 @@ def simpan_sesi_pengukuran():
 @main_bp.route('/sesi/detail/<session_uuid>', methods=['GET'])
 def sesi_detail_view(session_uuid):
     sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
     return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
 
 
@@ -331,7 +331,7 @@ def pemicu_analisis_ai(session_uuid):
 
     if not ai_worker_active:
         flash("Gagal memicu Analisis AI: Layanan AI Harness Worker sedang offline (tidak aktif). Silakan jalankan worker.py di folder services/ai-harness terlebih dahulu sebelum menekan tombol ini!", "danger")
-        hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
         return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
 
     sesi.status = 'analyzing'
@@ -347,7 +347,7 @@ def pemicu_analisis_ai(session_uuid):
     except Exception as e:
         print(f"Redis Enqueue LLM Warning: {e}")
 
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+    hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
     return render_template('sesi_detail.html', sesi=sesi, hasil=hasil)
 
 
@@ -365,7 +365,7 @@ def export_word():
         sesi = MeasurementSession.query.filter_by(session_uuid=suid).first()
         if sesi:
             stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-            hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+            hasil = HasilPengukuran.query.filter_by(session_uuid=suid).first()
             sessions_data.append((sesi, stasiun, hasil))
     doc_io = generate_word_report(sessions_data)
     return send_file(
@@ -385,7 +385,7 @@ def export_pdf():
         sesi = MeasurementSession.query.filter_by(session_uuid=suid).first()
         if sesi:
             stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-            hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+            hasil = HasilPengukuran.query.filter_by(session_uuid=suid).first()
             sessions_data.append((sesi, stasiun, hasil))
     pdf_io = generate_pdf_report(sessions_data)
     return send_file(
@@ -496,12 +496,13 @@ def api_telegram_sesi_paginated():
     )
 
     data = []
+    data = []
     for sesi in pagination.items:
         stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-        hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+        hasil = HasilPengukuran.query.filter_by(session_uuid=sesi.session_uuid)\
             .filter(HasilPengukuran.catatan_llm != None)\
             .order_by(HasilPengukuran.id.desc()).first() or \
-            HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+            HasilPengukuran.query.filter_by(session_uuid=sesi.session_uuid).first()
         data.append({
             "session_uuid": sesi.session_uuid,
             "nama_stasiun": stasiun.nama_stasiun if stasiun else "Tidak Diketahui",
@@ -528,10 +529,10 @@ def api_telegram_export_word(session_uuid):
     """Menghasilkan file Word (.docx) langsung untuk dikirim ke Telegram"""
     sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
     stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+    hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid)\
         .filter(HasilPengukuran.catatan_llm != None)\
         .order_by(HasilPengukuran.id.desc()).first() or \
-        HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
 
     doc_io = generate_word_report([(sesi, stasiun, hasil)])
     return send_file(
@@ -547,10 +548,10 @@ def api_telegram_export_pdf(session_uuid):
     """Menghasilkan file PDF (.pdf) langsung untuk dikirim ke Telegram"""
     sesi = MeasurementSession.query.filter_by(session_uuid=session_uuid).first_or_404()
     stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+    hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid)\
         .filter(HasilPengukuran.catatan_llm != None)\
         .order_by(HasilPengukuran.id.desc()).first() or \
-        HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
 
     pdf_io = generate_pdf_report([(sesi, stasiun, hasil)])
     return send_file(
@@ -568,10 +569,10 @@ def api_telegram_detail_laporan(session_uuid):
         return {"status": "error", "message": "Sesi tidak ditemukan"}, 404
 
     stasiun = StasiunRadio.query.get(sesi.stasiun_id)
-    hasil = HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id)\
+    hasil = HasilPengukuran.query.filter_by(session_uuid=session_uuid)\
         .filter(HasilPengukuran.catatan_llm != None)\
         .order_by(HasilPengukuran.id.desc()).first() or \
-        HasilPengukuran.query.filter_by(stasiun_id=sesi.stasiun_id).order_by(HasilPengukuran.id.desc()).first()
+        HasilPengukuran.query.filter_by(session_uuid=session_uuid).first()
 
     return {
         "status": "success",

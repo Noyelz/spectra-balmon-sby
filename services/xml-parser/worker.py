@@ -90,30 +90,30 @@ def process_xml_parsing_job(session_uuid):
         cursor.execute("""
             INSERT INTO hasil_pengukuran (
                 stasiun_id, tanggal_pengukuran, level_dbm, band_width_khz, deviasi_khz,
-                h1_mhz, h1_dbm, h1_db, h2_mhz, h2_dbm, h2_db, h3_mhz, h3_dbm, h3_db, keterangan
+                h1_mhz, h1_dbm, h1_db, h2_mhz, h2_dbm, h2_db, h3_mhz, h3_dbm, h3_db, keterangan, session_uuid
             ) VALUES (
                 %s, CURRENT_DATE, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
             )
         """, (
             stasiun_id, level_dbm, bw_khz, deviasi_khz,
             harmonisa['h1_mhz'], harmonisa['h1_dbm'], harmonisa['h1_db'],
             harmonisa['h2_mhz'], harmonisa['h2_dbm'], harmonisa['h2_db'],
             harmonisa['h3_mhz'], harmonisa['h3_dbm'], harmonisa['h3_db'],
-            ket_crosscheck
+            ket_crosscheck, session_uuid
         ))
 
         # Update status di measurement_session
         cursor.execute("UPDATE measurement_session SET status = %s WHERE id = %s", (final_status, session_id))
         conn.commit()
 
-        print(f"✅ [Worker] Selesai parsing {session_uuid}! Status: {final_status}. {ket_crosscheck}")
+        print(f"[Worker] Selesai parsing {session_uuid}! Status: {final_status}. {ket_crosscheck}")
 
     except Exception as err:
         conn.rollback()
         cursor.execute("UPDATE measurement_session SET status = 'error_parsing' WHERE session_uuid = %s", (session_uuid,))
         conn.commit()
-        print(f"❌ Error pada Worker Job {session_uuid}: {err}")
+        print(f"Error pada Worker Job {session_uuid}: {err}")
     finally:
         cursor.close()
         conn.close()
@@ -121,5 +121,5 @@ def process_xml_parsing_job(session_uuid):
 if __name__ == '__main__':
     redis_conn = redis.from_url(REDIS_URL)
     worker = Worker(['parse_xml_tasks'], connection=redis_conn)
-    print("⚡ XML Parser Worker siap mendengarkan antrean 'parse_xml_tasks'...")
+    print("XML Parser Worker siap mendengarkan antrean 'parse_xml_tasks'...")
     worker.work()

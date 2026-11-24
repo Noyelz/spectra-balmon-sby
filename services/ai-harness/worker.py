@@ -26,7 +26,7 @@ def get_db_connection():
 
 def process_llm_analysis_job(session_uuid):
     """Job Worker: Membaca parameter 13 kolom & Mengirim ke Local LLM"""
-    print(f"🤖 [AI-Harness Worker] Memulai Analisis LLM untuk Sesi: {session_uuid}")
+    print(f"[AI-Harness Worker] Memulai Analisis LLM untuk Sesi: {session_uuid}")
     
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -36,20 +36,19 @@ def process_llm_analysis_job(session_uuid):
         cursor.execute("UPDATE measurement_session SET status = 'analyzing' WHERE session_uuid = %s", (session_uuid,))
         conn.commit()
 
-        # 1. Ambil data stasiun & parameter 13 kolom terbaru dari PostgreSQL
+        # 1. Ambil data stasiun & parameter terbaru berdasarkan UUID Sesi
         cursor.execute("""
             SELECT r.nama_stasiun, r.frekuensi_mhz, h.level_dbm, h.band_width_khz, h.deviasi_khz,
                    h.h1_mhz, h.h1_dbm, h.h1_db, h.h2_mhz, h.h2_dbm, h.h2_db, h.h3_mhz, h.h3_dbm, h.h3_db, h.id
-            FROM measurement_session s
-            JOIN stasiun_radio r ON s.stasiun_id = r.id
-            JOIN hasil_pengukuran h ON h.stasiun_id = r.id
-            WHERE s.session_uuid = %s
+            FROM hasil_pengukuran h
+            JOIN stasiun_radio r ON h.stasiun_id = r.id
+            WHERE h.session_uuid = %s
             ORDER BY h.id DESC LIMIT 1
         """, (session_uuid,))
         
         row = cursor.fetchone()
         if not row:
-            print(f"❌ Data pengukuran untuk sesi {session_uuid} tidak ditemukan.")
+            print(f"Data pengukuran untuk sesi {session_uuid} tidak ditemukan.")
             return
 
         stasiun_name = row[0]
@@ -76,13 +75,13 @@ def process_llm_analysis_job(session_uuid):
         cursor.execute("UPDATE measurement_session SET status = 'completed' WHERE session_uuid = %s", (session_uuid,))
         conn.commit()
 
-        print(f"✅ [AI-Harness Worker] Selesai Analisis LLM untuk Sesi {session_uuid}!")
+        print(f"[AI-Harness Worker] Selesai Analisis LLM untuk Sesi {session_uuid}!")
 
     except Exception as err:
         conn.rollback()
         cursor.execute("UPDATE measurement_session SET status = 'error_llm' WHERE session_uuid = %s", (session_uuid,))
         conn.commit()
-        print(f"❌ Error pada AI-Harness Worker Job {session_uuid}: {err}")
+        print(f"Error pada AI-Harness Worker Job {session_uuid}: {err}")
     finally:
         cursor.close()
         conn.close()
@@ -90,5 +89,5 @@ def process_llm_analysis_job(session_uuid):
 if __name__ == '__main__':
     redis_conn = redis.from_url(REDIS_URL)
     worker = Worker(['llm_tasks'], connection=redis_conn)
-    print("⚡ AI Harness Worker (LM Studio Local LLM) siap mendengarkan antrean 'llm_tasks'...")
+    print("AI Harness Worker (LM Studio Local LLM) siap mendengarkan antrean 'llm_tasks'...")
     worker.work()
